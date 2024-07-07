@@ -62,86 +62,101 @@ end)
 ---------------------------------------------------------------------
 RegisterNetEvent('rex-huntwagon:client:spawnwagon', function(data)
     RSGCore.Functions.TriggerCallback('rex-huntwagon:server:getwagons', function(results)
-
         if results == nil then return lib.notify({ title = Lang:t('client.lang_7'), description = Lang:t('client.lang_8'), type = 'inform', duration = 5000 }) end
         if hutingwagonspawned then return lib.notify({ title = Lang:t('client.lang_9'), description = Lang:t('client.lang_10'), type = 'error', duration = 5000 }) end
         
+        local options = {}
         for i = 1, #results do
             local wagon = results[i]
-            if wagon.huntingcamp == data.huntingcamp then
-                if wagon.damaged ~= 1 then
-                    local carthash = joaat('huntercart01')
-                    local propset = joaat('pg_mp005_huntingWagonTarp01')
-                    local lightset = joaat('pg_teamster_cart06_lightupgrade3')
-
-                    if wagonBlip then
-                        RemoveBlip(wagonBlip)
-                    end
-
-                    if IsModelAVehicle(carthash) then
-                        Citizen.CreateThread(function()
-                            RequestModel(carthash)
-                            while not HasModelLoaded(carthash) do
-                                Citizen.Wait(0)
-                            end
-                            local huntingcart = CreateVehicle(carthash, data.spawncoords, true, false)
-                            Citizen.InvokeNative(0x06FAACD625D80CAA, huntingcart)
-                            SetVehicleOnGroundProperly(huntingcart)
-                            currentHuntingWagon = huntingcart
-                            currentHuntingPlate = wagon.plate
-                            Wait(200)
-                            Citizen.InvokeNative(0x75F90E4051CC084C, huntingcart, propset) -- AddAdditionalPropSetForVehicle
-                            Citizen.InvokeNative(0xC0F0417A90402742, huntingcart, lightset) -- AddLightPropSetToVehicle
-                            Citizen.InvokeNative(0xF89D82A0582E46ED, huntingcart, 5) -- SetVehicleLivery
-                            Citizen.InvokeNative(0x8268B098F6FCA4E2, huntingcart, 2) -- SetVehicleTint
-                            Citizen.InvokeNative(0x06FAACD625D80CAA, huntingcart) -- NetworkRegisterEntityAsNetworked
-
-                            wagonBlip = Citizen.InvokeNative(0x23F74C2FDA6E7C61, -1749618580, huntingcart) -- BlipAddForEntity
-                            Citizen.InvokeNative(0x9CB1A1623062F402, wagonBlip, 'Hunting Wagon') -- SetBlipName
-
-                            SetEntityVisible(huntingcart, true)
-                            SetModelAsNoLongerNeeded(carthash)
-
-                            Wait(1000)
-
-                            -- set hunting wagon tarp
-                            RSGCore.Functions.TriggerCallback('rex-huntwagon:server:gettarpinfo', function(results)
-                                local percentage = results * Config.TotalAnimalsStored / 100
-                                Citizen.InvokeNative(0x31F343383F19C987, huntingcart, tonumber(percentage), 1)
-                            end, wagon.plate)
-
-                            -- target start
-							exports['rsg-target']:AddTargetEntity(huntingcart, {
-								options = {
-									{
-										icon = 'fas fa-eye',
-										label = Lang:t('client.lang_16'),
-										targeticon = 'fas fa-eye',
-										action = function()
-											TriggerEvent('rex-huntwagon:client:openmenu')
-										end
-									},
-								},
-								distance = Config.TargetDistance,
-							})
-							-- target end
-
-                            lib.notify({ title = 'Hunting Wagon Spawned', description = Lang:t('client.lang_11'), type = 'inform', duration = 5000 })
-                            hutingwagonspawned = true
-                            
-                        end)
-                    end
-                else
-                    lib.notify({ title = Lang:t('client.lang_12'), description = Lang:t('client.lang_13'), type = 'error', duration = 5000 })
-                    TriggerEvent('rex-huntwagon:client:fixwagon', wagon.plate)
-                end
-            else
-                lib.notify({ title = Lang:t('client.lang_14'), description = Lang:t('client.lang_15'), type = 'inform', duration = 5000 })
-            end
+            table.insert(options, {
+                title = "Wagon " .. wagon.plate,
+                description = wagon.huntingcamp .. (wagon.damaged == 1 and " (Damaged)" or ""),
+                event = 'rex-huntwagon:client:spawnSelectedWagon',
+                args = { wagon = wagon, spawncoords = data.spawncoords }
+            })
         end
+
+        if #options == 0 then
+            return lib.notify({ title = Lang:t('client.lang_14'), description = Lang:t('client.lang_15'), type = 'inform', duration = 5000 })
+        end
+
+        lib.registerContext({
+            id = 'wagon_selection_menu',
+            title = 'Select a Wagon',
+            options = options
+        })
+        lib.showContext('wagon_selection_menu')
     end)
 end)
 
+RegisterNetEvent('rex-huntwagon:client:spawnSelectedWagon', function(data)
+    local wagon = data.wagon
+    if wagon.damaged == 1 then
+        lib.notify({ title = Lang:t('client.lang_12'), description = Lang:t('client.lang_13'), type = 'error', duration = 5000 })
+        TriggerEvent('rex-huntwagon:client:fixwagon', wagon.plate)
+        return
+    end
+
+    local carthash = joaat('huntercart01')
+    local propset = joaat('pg_mp005_huntingWagonTarp01')
+    local lightset = joaat('pg_teamster_cart06_lightupgrade3')
+
+    if wagonBlip then
+        RemoveBlip(wagonBlip)
+    end
+
+    if IsModelAVehicle(carthash) then
+        Citizen.CreateThread(function()
+            RequestModel(carthash)
+            while not HasModelLoaded(carthash) do
+                Citizen.Wait(0)
+            end
+            local huntingcart = CreateVehicle(carthash, data.spawncoords, true, false)
+            Citizen.InvokeNative(0x06FAACD625D80CAA, huntingcart)
+            SetVehicleOnGroundProperly(huntingcart)
+            currentHuntingWagon = huntingcart
+            currentHuntingPlate = wagon.plate
+            Wait(200)
+            Citizen.InvokeNative(0x75F90E4051CC084C, huntingcart, propset)
+            Citizen.InvokeNative(0xC0F0417A90402742, huntingcart, lightset)
+            Citizen.InvokeNative(0xF89D82A0582E46ED, huntingcart, 5)
+            Citizen.InvokeNative(0x8268B098F6FCA4E2, huntingcart, 2)
+            Citizen.InvokeNative(0x06FAACD625D80CAA, huntingcart)
+
+            wagonBlip = Citizen.InvokeNative(0x23F74C2FDA6E7C61, -1749618580, huntingcart)
+            Citizen.InvokeNative(0x9CB1A1623062F402, wagonBlip, 'Hunting Wagon')
+
+            SetEntityVisible(huntingcart, true)
+            SetModelAsNoLongerNeeded(carthash)
+
+            Wait(1000)
+
+            -- Set hunting wagon tarp
+            RSGCore.Functions.TriggerCallback('rex-huntwagon:server:gettarpinfo', function(results)
+                local percentage = results * Config.TotalAnimalsStored / 100
+                Citizen.InvokeNative(0x31F343383F19C987, huntingcart, tonumber(percentage), 1)
+            end, wagon.plate)
+
+            -- Target setup (same as before)
+            exports['rsg-target']:AddTargetEntity(huntingcart, {
+                options = {
+                    {
+                        icon = 'fas fa-eye',
+                        label = Lang:t('client.lang_16'),
+                        targeticon = 'fas fa-eye',
+                        action = function()
+                            TriggerEvent('rex-huntwagon:client:openmenu')
+                        end
+                    },
+                },
+                distance = Config.TargetDistance,
+            })
+
+            lib.notify({ title = 'Hunting Wagon Spawned', description = Lang:t('client.lang_11'), type = 'inform', duration = 5000 })
+            hutingwagonspawned = true
+        end)
+    end
+end)
 ---------------------------------------------------------------------
 -- get closest hunter camp to store wagon
 ---------------------------------------------------------------------
