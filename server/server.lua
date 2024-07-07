@@ -8,22 +8,24 @@ RegisterServerEvent('rex-huntwagon:server:buyhuntingcart', function(data)
     local Player = RSGCore.Functions.GetPlayer(src)
     local citizenid = Player.PlayerData.citizenid
     local cashBalance = Player.PlayerData.money["cash"]
+    
     if cashBalance >= Config.WagonPrice then
         local result = MySQL.prepare.await("SELECT COUNT(*) as count FROM rex_hunting_wagons WHERE citizenid = ?", { citizenid })
-        if result == 0 then
-            local plate = GeneratePlate()
-            MySQL.insert('INSERT INTO rex_hunting_wagons(citizenid, plate, huntingcamp, damaged, active) VALUES(@citizenid, @plate, @huntingcamp, @damaged, @active)', {
-                ['@citizenid'] = citizenid,
-                ['@plate'] = plate,
-                ['@huntingcamp'] = data.huntingcamp,
-                ['@damaged'] = 0,
-                ['@active'] = 1,
-            })
-            Player.Functions.RemoveMoney("cash", Config.WagonPrice, "hunting-wagon")
-            TriggerClientEvent('ox_lib:notify', src, {title = Lang:t('server.lang_1'), description = Lang:t('server.lang_2'), type = 'success', duration = 5000 })
-        else
-            TriggerClientEvent('ox_lib:notify', src, {title = Lang:t('server.lang_3'), description = Lang:t('server.lang_4'), type = 'error', duration = 5000 })
-        end
+        
+        -- Remove the check for existing wagons
+        local plate = GeneratePlate()
+        MySQL.insert('INSERT INTO rex_hunting_wagons(citizenid, plate, huntingcamp, damaged, active) VALUES(@citizenid, @plate, @huntingcamp, @damaged, @active)', {
+            ['@citizenid'] = citizenid,
+            ['@plate'] = plate,
+            ['@huntingcamp'] = data.huntingcamp,
+            ['@damaged'] = 0,
+            ['@active'] = 1,
+        })
+        Player.Functions.RemoveMoney("cash", Config.WagonPrice, "hunting-wagon")
+        
+        -- Modify the success message to include the number of wagons owned
+        local newCount = result + 1
+        TriggerClientEvent('ox_lib:notify', src, {title = Lang:t('server.lang_1'), description = Lang:t('server.lang_2') .. " You now own " .. newCount .. " wagon(s).", type = 'success', duration = 5000 })
     else
         TriggerClientEvent('ox_lib:notify', src, {title = Lang:t('server.lang_5'), description = '$'..Config.WagonPrice..Lang:t('server.lang_6'), type = 'error', duration = 7000 })
     end
